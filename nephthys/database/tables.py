@@ -1,4 +1,5 @@
 from piccolo.columns import Boolean
+from piccolo.columns import Bytea
 from piccolo.columns import ForeignKey
 from piccolo.columns import LazyTableReference
 from piccolo.columns import M2M
@@ -38,7 +39,7 @@ class User(Table, tablename="User"):
 
 class Ticket(Table, tablename="Ticket"):
     id = Serial(primary_key=True, unique=True)
-    title = Text()
+    title = Text(null=True)
     description = Text()
     status = TicketStatusColumn(default=TicketStatus.OPEN)
 
@@ -116,6 +117,8 @@ class TeamTag(Table, tablename="Tag"):
 class CategoryTag(Table, tablename="CategoryTag"):
     id = Serial(primary_key=True, unique=True)
     name = Text(unique=True)
+    slug = Text(unique=True)
+    description = Text(null=True)
     created_by = ForeignKey(references=User, db_column_name="createdById", null=True)
     created_at = Timestamptz(default=TimestamptzNow(), db_column_name="createdAt")
 
@@ -177,16 +180,13 @@ class Feedback(Table, tablename="Feedback"):
     created_at = Timestamptz(default=TimestamptzNow(), db_column_name="createdAt")
 
 
-# All tables must be listed here so that piccolo_app.py can find them.
-# This list is used for generating auto migrations.
-ALL_TABLES = [
-    User,
-    Ticket,
-    QuestionTag,
-    TeamTag,
-    CategoryTag,
-    BotMessage,
-    TagsOnTickets,
-    UserTagSubscription,
-    Feedback,
-]
+class APIKey(Table, tablename="api_key"):
+    id = Serial(primary_key=True, unique=True)
+    user = ForeignKey(
+        references=User,
+        db_column_name="user_id",
+    )
+    label = Text()
+    api_key_hash = Bytea(unique=True)
+    api_key_censored = Text()
+    created_at = Timestamptz(default=TimestamptzNow())

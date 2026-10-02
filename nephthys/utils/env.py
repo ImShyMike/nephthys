@@ -1,16 +1,32 @@
 import logging
 import os
+import secrets
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
+from typing import overload
 
 from aiohttp import ClientSession
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
 from slack_sdk.web.async_client import AsyncWebClient
+from starlette.datastructures import Secret
 
 from nephthys.transcripts import transcripts
 from nephthys.transcripts.transcript import Transcript
 
+# Static paths
+STATIC_DIR = Path(Path.cwd() / "nephthys" / "public")
+TEMPLATES_DIR = Path(Path.cwd() / "nephthys" / "templates")
+
 load_dotenv(override=True)
+
+
+@overload
+def get_environ[T: str](key: str, default: T) -> str | T: ...
+@overload
+def get_environ(key: str, default: None = None) -> str | None: ...
+def get_environ(key: str, default: str | None = None) -> str | None:
+    return os.environ.get(key, default)
 
 
 def get_environ_bool(name: str, default: bool) -> bool:
@@ -25,6 +41,54 @@ def get_environ_bool(name: str, default: bool) -> bool:
     raise ValueError(f"Invalid boolean env var {name}={value!r}")
 
 
+@dataclass
+class HCAConfig:
+    client_id: str
+    client_secret: str
+    base_url: str
+    session_secret: Secret
+
+
+def create_hca_config(environment: str) -> HCAConfig | None:
+    hca_client_id = os.environ.get("HCA_CLIENT_ID")
+    hca_client_secret = os.environ.get("HCA_CLIENT_SECRET")
+    session_secret = os.environ.get("SESSION_SECRET")
+    if (not hca_client_id) and (not hca_client_secret):
+        return None
+    if (not hca_client_id) or (not hca_client_secret):
+        raise ValueError(
+            "Both of HCA_CLIENT_ID and HCA_CLIENT_SECRET must be set; or neither must be set (for no HCA integration)"
+        )
+    if not session_secret:
+        if environment != "development":
+            raise ValueError(
+                "SESSION_SECRET environment variable must be set when HCA integration is enabled"
+            )
+        logging.info(
+            "Generating random session signing secret for development (set SESSION_SECRET to persist sessions)"
+        )
+        session_secret = secrets.token_urlsafe(32)
+
+    return HCAConfig(
+        client_id=hca_client_id,
+        client_secret=hca_client_secret,
+        base_url=os.environ.get("HCA_BASE_URL", "https://auth.hackclub.com"),
+        session_secret=Secret(session_secret),
+    )
+
+
+def get_base_url() -> str:
+    if base_url := os.environ.get("BASE_URL"):
+        return base_url.rstrip("/")
+    if coolify_url := os.environ.get("COOLIFY_URL"):
+        logging.info(f"Using base URL from Coolify: base_url={coolify_url}")
+        return coolify_url.rstrip("/")
+    # Falling back to this means that it'll use assets served by nephthys.hackclub.com, which does work
+    FALLBACK_URL = "https://nephthys.hackclub.com"
+    logging.warning(f"Using fallback base_url={FALLBACK_URL}")
+    return FALLBACK_URL.rstrip("/")
+
+
 class Environment:
     def __init__(self):
         self.slack_bot_token = os.environ.get("SLACK_BOT_TOKEN", "unset")
@@ -33,13 +97,11 @@ class Environment:
         self.slack_app_token = os.environ.get("SLACK_APP_TOKEN")
 
         self.uptime_url = os.environ.get("UPTIME_URL")
-        self.hack_club_ai_api_key = os.environ.get("HACK_CLUB_AI_API_KEY")
-        self.ai_base_url = os.environ.get(
-            "HACK_CLUB_AI_BASE_URL", "https://ai.hackclub.com/proxy/v1"
+        self.ai_title_model = os.environ.get(
+            "AI_TITLE_MODEL", "deepseek/deepseek-v4.1-flash"
         )
-        self.ai_title_model = os.environ.get("AI_TITLE_MODEL", "openai/gpt-oss-120b")
-        self.ai_tag_model = os.environ.get(
-            "AI_TAG_MODEL", "google/gemini-3-flash-preview"
+        self.ai_category_model = os.environ.get(
+            "AI_CATEGORY_MODEL", "typesafe/jev-1.13"
         )
 
         self.otel_logs_url = os.environ.get("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")
@@ -57,9 +119,7 @@ class Environment:
             or default_log_level
         )
         self.log_level_otel = os.environ.get("LOG_LEVEL_OTEL", logging.INFO)
-        self.base_url: str = os.environ.get(
-            "BASE_URL", "https://nephthys.hackclub.com"
-        ).rstrip("/")
+        self.base_url: str = get_base_url()
 
         self.slack_help_channel = os.environ.get("SLACK_HELP_CHANNEL", "unset")
         self.slack_ticket_channel = os.environ.get("SLACK_TICKET_CHANNEL", "unset")
@@ -69,6 +129,7 @@ class Environment:
         self.daily_summary = get_environ_bool("DAILY_SUMMARY", default=True)
         self.enable_feedback = get_environ_bool("ENABLE_FEEDBACK", default=False)
         self.app_title = os.environ.get("APP_TITLE", "helper heidi")
+        self.hca = create_hca_config(self.environment)
 
         self.port = int(os.environ.get("PORT", 3000))
 
@@ -119,14 +180,6 @@ class Environment:
         )
 
         self.slack_client = AsyncWebClient(token=self.slack_bot_token)
-        self.ai_client = (
-            AsyncOpenAI(
-                base_url=self.ai_base_url,
-                api_key=self.hack_club_ai_api_key,
-            )
-            if self.hack_club_ai_api_key
-            else None
-        )
 
         # Cache whether the user token has workspace admin privileges
         self._workspace_admin_available: bool | Literal["unchecked"] = "unchecked"
