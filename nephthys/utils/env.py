@@ -196,11 +196,14 @@ class Environment:
         user_token_identity = await self.slack_client.auth_test(
             token=self.slack_user_token
         )
-        user_id = user_token_identity["user_id"]
+        user_id = user_token_identity.get("user_id")
         if not user_id:
-            raise ValueError(
-                f"Unable to get my user ID from Slack API: {user_token_identity}"
+            # e.g. an app-level (xapp-) token was given instead of a user token
+            logging.error(
+                f"SLACK_USER_TOKEN doesn't belong to a user, so workspace admin features are disabled: {user_token_identity}"
             )
+            self._workspace_admin_available = False
+            return False
         user_info_response = await self.slack_client.users_info(user=user_id)
         user_info = user_info_response["user"]
         if not user_info:
