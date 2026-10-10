@@ -8,7 +8,7 @@ Nephthys is the bot powering many support channels in the Hack Club Slack such a
 
 Category tags are used to classify tickets into broader categories such as "Fulfillment", "Identity", or "Platform Issues". When a new ticket is created, AI analyzes the message content and automatically assigns the most relevant category tag.
 
-Helpers can reassign these tags in the private tickets channel if the AI suggestion is incorrect.
+Helpers can reassign these tags in the private tickets channel if the AI suggestion is incorrect. Set `AI_CATEGORY_TAGGING=false` to turn off the automatic AI tagging and only tag tickets by hand.
 
 ### Team tags
 

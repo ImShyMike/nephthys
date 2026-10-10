@@ -103,6 +103,8 @@ class Environment:
         self.ai_category_model = os.environ.get(
             "AI_CATEGORY_MODEL", "typesafe/jev-1.13"
         )
+        # Set to false to stop AI from picking category tags for new tickets
+        self.ai_category_tagging = get_environ_bool("AI_CATEGORY_TAGGING", default=True)
         self.ai_faq_model = os.environ.get("AI_FAQ_MODEL", self.ai_category_model)
         # Only link an FAQ entry when the model is at least this confident
         self.ai_faq_min_confidence = float(

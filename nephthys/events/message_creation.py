@@ -468,6 +468,8 @@ async def generate_ticket_title(text: str) -> str | None:
 
 
 async def generate_category_tag(text: str) -> CategoryTag | None:
+    if not env.ai_category_tagging:
+        return None
     category_tags = await CategoryTag.objects()
     if not category_tags or not ai_client:
         return None
