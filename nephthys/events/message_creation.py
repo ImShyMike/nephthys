@@ -23,6 +23,9 @@ from nephthys.macros import run_macro
 from nephthys.utils.ai import ai_client
 from nephthys.utils.ai import OpenRouterClient
 from nephthys.utils.env import env
+from nephthys.utils.faq import faq_link_label
+from nephthys.utils.faq import faq_section_url
+from nephthys.utils.faq import find_faq_entry
 from nephthys.utils.logging import send_heartbeat
 from nephthys.utils.performance import perf_timer
 from nephthys.utils.slack_user import get_user_profile
@@ -35,6 +38,12 @@ ALLOWED_SUBTYPES = ["file_share", "me_message", "thread_broadcast"]
 TICKET_TITLE_GENERATION_DURATION = Histogram(
     "nephthys_ticket_title_generation_duration_seconds",
     "How long it takes to generate a ticket title using AI",
+)
+
+
+FAQ_MATCH_DURATION = Histogram(
+    "nephthys_faq_match_duration_seconds",
+    "How long it takes to match a ticket to an FAQ entry using AI",
 )
 
 
@@ -271,6 +280,64 @@ async def handle_new_question(
             f"Top-level message for thread_ts={event['ts']} has been deleted. Cleaning up and deleting ticket_id={ticket.id}"
         )
         await delete_and_clean_up_ticket(ticket)
+        return
+
+    async with perf_timer("AI FAQ matching", FAQ_MATCH_DURATION):
+        faq_entry = await find_faq_entry(text)
+
+    if faq_entry:
+        updated_text = user_facing_message_text + env.transcript.faq_suggestion.format(
+            url=faq_section_url(faq_entry),
+            question=faq_link_label(faq_entry),
+        )
+        try:
+            await client.chat_update(
+                channel=event["channel"],
+                ts=user_facing_message_ts,
+                text=updated_text,
+                blocks=user_facing_message_blocks(
+                    updated_text, msg_ts=event["ts"], ticket_url=ticket_url
+                ),
+            )
+        except SlackApiError as e:
+            logging.warning(f"Failed to add FAQ link to user-facing message: {e}")
+
+
+def user_facing_message_blocks(
+    text: str, msg_ts: str, ticket_url: str
+) -> list[dict[str, Any]]:
+    """Blocks for the user-facing message: the text, a resolve button and a
+    backend link."""
+    return [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": text},
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {
+                        "type": "plain_text",
+                        "text": env.transcript.resolve_ticket_button,
+                    },
+                    "style": "primary",
+                    "action_id": "mark_resolved",
+                    "value": msg_ts,
+                },
+            ],
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"<{ticket_url}|backend> (for support team).",
+                }
+            ],
+        },
+    ]
 
 
 async def send_user_facing_message(
@@ -291,36 +358,9 @@ async def send_user_facing_message(
     response = await client.chat_postMessage(
         channel=event["channel"],
         text=text,
-        blocks=[
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": text},
-            },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": env.transcript.resolve_ticket_button,
-                        },
-                        "style": "primary",
-                        "action_id": "mark_resolved",
-                        "value": f"{event['ts']}",
-                    },
-                ],
-            },
-            {
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"<{ticket_url}|backend> (for support team).",
-                    }
-                ],
-            },
-        ],
+        blocks=user_facing_message_blocks(
+            text, msg_ts=event["ts"], ticket_url=ticket_url
+        ),
         thread_ts=event.get("ts"),
         unfurl_links=True,
         unfurl_media=True,

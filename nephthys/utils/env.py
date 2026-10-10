@@ -103,6 +103,11 @@ class Environment:
         self.ai_category_model = os.environ.get(
             "AI_CATEGORY_MODEL", "typesafe/jev-1.13"
         )
+        self.ai_faq_model = os.environ.get("AI_FAQ_MODEL", self.ai_category_model)
+        # Only link an FAQ entry when the model is at least this confident
+        self.ai_faq_min_confidence = float(
+            os.environ.get("AI_FAQ_MIN_CONFIDENCE", "0.6")
+        )
 
         self.otel_logs_url = os.environ.get("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")
         self.otel_service_name = os.environ.get("OTEL_SERVICE_NAME", "nephthys")

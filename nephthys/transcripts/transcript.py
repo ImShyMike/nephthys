@@ -45,6 +45,16 @@ class Transcript(BaseModel):
         description="FAQ link URL",
     )
 
+    faq_canvas_id: str | None = Field(
+        default=None,
+        description="File ID of the FAQ canvas. When set, the bot reads the canvas and uses AI to link the exact FAQ question that answers a ticket",
+    )
+
+    faq_suggestion: str = Field(
+        default="\n\n:rac_info: this bit of the faq might answer your question: <{url}|*{question}*>",
+        description="Appended to the ticket-creation message when the AI finds a matching FAQ entry",
+    )
+
     summer_help_channel: str = Field(
         default="C091D312J85", description="Summer help channel ID"
     )

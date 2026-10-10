@@ -12,6 +12,11 @@ class Terra(Transcript):
     team_channel: str = "C0C1N3WCU5D"
 
     faq_link: str = "https://hackclub.enterprise.slack.com/docs/T0266FRGM/F0C21CF9S94"
+    faq_canvas_id: str | None = "F0C21CF9S94"
+    faq_suggestion: str = (
+        "\n\npsst, i think this bit of the faq might answer it: <{url}|*{question}*>"
+    )
+
     first_ticket_create: str = f"""
 hihi! i'm poobert and i'm here to help you solve your questions! (in the meantime, please check <{faq_link}|the FAQ>)
 if your question has been answered, please hit the button below to mark it as resolved. ty!
