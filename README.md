@@ -19,7 +19,7 @@ You can assign yourself to get notified for specific tags on the app home
 
 ### FAQ links
 
-If a program's transcript sets `faq_canvas_id` (the `F...` ID of its FAQ canvas), Nephthys reads the canvas on startup and every 15 minutes. When a new ticket comes in, AI picks the FAQ question that answers it (if any) and adds a direct link to it in the welcome message. Each top-level bullet in the canvas is treated as a question, with the bullets nested under it as the answer. Needs `OPENROUTER_API_KEY` and the `files:read` scope.
+If a program's transcript sets `faq_canvas_id` (the `F...` ID of its FAQ canvas), Nephthys reads the canvas on startup and every 15 minutes. When a new ticket comes in, AI picks the FAQ question that answers it (if any) and replies in the thread with a direct link to it. Each top-level bullet in the canvas is treated as a question, with the bullets nested under it as the answer. Needs `OPENROUTER_API_KEY` and the `files:read` scope.
 
 ### Macros
 

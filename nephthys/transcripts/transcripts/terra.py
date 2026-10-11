@@ -14,7 +14,7 @@ class Terra(Transcript):
     faq_link: str = "https://hackclub.enterprise.slack.com/docs/T0266FRGM/F0C21CF9S94"
     faq_canvas_id: str | None = "F0C21CF9S94"
     faq_suggestion: str = (
-        "\n\npsst, i think this bit of the faq might answer it: <{url}|*{question}*>"
+        "psst, i think this bit of the faq might answer it: <{url}|*{question}*>"
     )
 
     first_ticket_create: str = f"""

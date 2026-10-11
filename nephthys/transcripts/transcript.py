@@ -51,8 +51,8 @@ class Transcript(BaseModel):
     )
 
     faq_suggestion: str = Field(
-        default="\n\n:rac_info: this bit of the faq might answer your question: <{url}|*{question}*>",
-        description="Appended to the ticket-creation message when the AI finds a matching FAQ entry",
+        default=":rac_info: this bit of the faq might answer your question: <{url}|*{question}*>",
+        description="Sent as a reply in the thread when the AI finds a matching FAQ entry",
     )
 
     summer_help_channel: str = Field(

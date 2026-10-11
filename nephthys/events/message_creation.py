@@ -30,6 +30,7 @@ from nephthys.utils.logging import send_heartbeat
 from nephthys.utils.performance import perf_timer
 from nephthys.utils.slack_user import get_user_profile
 from nephthys.utils.ticket_methods import delete_and_clean_up_ticket
+from nephthys.utils.ticket_methods import reply_to_ticket
 from nephthys.utils.ticket_methods import ThreadGoneError
 
 # Message subtypes that should be handled by on_message (messages with no subtype are always handled)
@@ -286,21 +287,17 @@ async def handle_new_question(
         faq_entry = await find_faq_entry(text)
 
     if faq_entry:
-        updated_text = user_facing_message_text + env.transcript.faq_suggestion.format(
-            url=faq_section_url(faq_entry),
-            question=faq_link_label(faq_entry),
-        )
         try:
-            await client.chat_update(
-                channel=event["channel"],
-                ts=user_facing_message_ts,
-                text=updated_text,
-                blocks=user_facing_message_blocks(
-                    updated_text, msg_ts=event["ts"], ticket_url=ticket_url
+            await reply_to_ticket(
+                ticket=ticket,
+                client=client,
+                text=env.transcript.faq_suggestion.format(
+                    url=faq_section_url(faq_entry),
+                    question=faq_link_label(faq_entry),
                 ),
             )
-        except SlackApiError as e:
-            logging.warning(f"Failed to add FAQ link to user-facing message: {e}")
+        except (SlackApiError, ThreadGoneError) as e:
+            logging.warning(f"Failed to send FAQ suggestion message: {e}")
 
 
 def user_facing_message_blocks(
