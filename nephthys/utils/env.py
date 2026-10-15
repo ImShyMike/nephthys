@@ -142,6 +142,9 @@ class Environment:
 
         self.slack_heartbeat_channel = os.environ.get("SLACK_HEARTBEAT_CHANNEL")
 
+        # Terra's interactions endpoint; Slack clicks on "terra:" buttons are forwarded there
+        self.terra_interactions_url = os.environ.get("TERRA_INTERACTIONS_URL")
+
         # Stale ticket auto-close: number of days of inactivity before closing
         # Set to a positive integer to enable, leave unset to disable
         stale_days_str = os.environ.get("STALE_TICKET_DAYS")

@@ -158,6 +158,15 @@ Using this feature is **not recommended** for most help channels, as tickets bei
 | -------- | --------- | ----------- | ------- |
 | `STALE_TICKET_DAYS` | Required | Enable stale ticket auto-close; tickets inactive for this many days will be automatically closed; leave unset to disable | _Unset_ (disabled) |
 
+## Terra interaction forwarding
+
+For running Terra's Slack bot (Poobert) on this app. Interactivity payloads whose `action_id` or `callback_id` starts with `terra:` are forwarded untouched (raw body plus Slack's signature headers) to Terra, which verifies them with this app's signing secret. Everything else is handled by Nephthys as usual. Only works over HTTP, not Socket Mode.
+
+<!-- prettier-ignore -->
+| Variable | Required? | Description | Default |
+| -------- | --------- | ----------- | ------- |
+| `TERRA_INTERACTIONS_URL` | Optional | Terra's interactions endpoint, e.g. `https://api.terra.example/slack/poobert-interactions`; leave unset to disable | _Unset_ (disabled) |
+
 ## Other feature flags
 
 You may wish to disable the daily summary for every low-traffic support channels.

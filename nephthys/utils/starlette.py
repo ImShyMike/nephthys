@@ -30,11 +30,18 @@ from nephthys.api.user import user_stats
 from nephthys.utils.env import env
 from nephthys.utils.env import STATIC_DIR
 from nephthys.utils.slack import app as slack_app
+from nephthys.utils.terra import forward_to_terra
+from nephthys.utils.terra import is_terra_interaction
 
 req_handler = AsyncSlackRequestHandler(slack_app)
 
 
 async def endpoint(req: Request):
+    if env.terra_interactions_url:
+        # Starlette caches the body, so Bolt can still read it afterwards
+        body = await req.body()
+        if is_terra_interaction(req, body):
+            return await forward_to_terra(req, body, env.terra_interactions_url)
     return await req_handler.handle(req)
 
 
