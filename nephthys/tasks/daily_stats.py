@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from datetime import timedelta
@@ -21,18 +22,15 @@ def slack_timestamp(dt: datetime, format: str = "date_short") -> str:
     return f"<!date^{int(dt.timestamp())}^{{{format}}}|{fallback}>"
 
 
-async def tickets_awaiting_response_message(tickets: list[Ticket]) -> str:
-    if not tickets:
-        return ":rac_woah: _btw, i looked for old unanswered tickets, but found none. well done team!_"
+# Slack recommends keeping message text under 4000 characters
+MAX_MESSAGE_LENGTH = 3500
 
-    count = len(tickets)
-    MAX_TICKETS = 5
+TICKETS_HEADER = ":rac_shy: *tickets you could take a look at*"
 
-    msg_lines = [
-        ":rac_shy: *tickets you could take a look at*",
-        "i found some older tickets that might be waiting for a response from someone...",
-    ]
-    for i, ticket in enumerate(tickets[:MAX_TICKETS]):
+
+async def ticket_lines(tickets: list[Ticket]) -> list[str]:
+    lines = []
+    for i, ticket in enumerate(tickets):
         label = (
             ticket.title
             or ticket.description[:100]
@@ -53,13 +51,40 @@ async def tickets_awaiting_response_message(tickets: list[Ticket]) -> str:
             if tag_links
             else ""
         )
-        msg_lines.append(
+        lines.append(
             f"{i + 1}. <{get_question_message_link(ticket)}|{label}>{tags_string} (created {created_date}, last reply *{last_reply}*)"
         )
-    if count > MAX_TICKETS:
-        msg_lines.append(f"_(plus {count - MAX_TICKETS} more)_")
+    return lines
 
-    return "\n".join(msg_lines)
+
+def chunk_lines(lines: list[str], max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
+    """Joins lines into as few messages as possible without going over max_length"""
+    chunks: list[str] = []
+    current: list[str] = []
+    current_length = 0
+    for line in lines:
+        line = line[:max_length]
+        if current and current_length + len(line) + 1 > max_length:
+            chunks.append("\n".join(current))
+            current, current_length = [], 0
+        current.append(line)
+        current_length += len(line) + 1
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
+
+
+async def get_file_share_ts(file_id: str, channel: str) -> str | None:
+    """Finds the ts of the message a file was shared in, since files_upload_v2 doesn't return it"""
+    for _ in range(5):
+        info = await env.slack_client.files_info(file=file_id)
+        shares = info["file"].get("shares", {})
+        for share_type in ("public", "private"):
+            channel_shares = shares.get(share_type, {}).get(channel)
+            if channel_shares:
+                return channel_shares[0]["ts"]
+        await asyncio.sleep(1)
+    return None
 
 
 async def send_daily_stats():
@@ -112,19 +137,58 @@ you managed to close a whopping *{stats.closed_today}* tickets in the last 24 ho
 *:rac_info: today's leaderboard*
 {daily_leaderboard_str}
 
-{await tickets_awaiting_response_message(tickets_awaiting_response)}
 """
 
+        thread_messages: list[str] = []
+        if not tickets_awaiting_response:
+            msg += ":rac_woah: _btw, i looked for old unanswered tickets, but found none. well done team!_"
+        else:
+            lines = await ticket_lines(tickets_awaiting_response)
+            tickets_msg = "\n".join(
+                [
+                    TICKETS_HEADER,
+                    "i found some older tickets that might be waiting for a response from someone...",
+                    *lines,
+                ]
+            )
+            if len(msg) + len(tickets_msg) <= MAX_MESSAGE_LENGTH:
+                msg += tickets_msg
+            else:
+                msg += "\n".join(
+                    [
+                        TICKETS_HEADER,
+                        f"i found *{len(lines)}* older tickets that might be waiting for a response from someone... there's a lot of them so i put them all in the thread :rac_shy:",
+                    ]
+                )
+                thread_messages = chunk_lines(lines)
+
         if pie_chart:
-            await env.slack_client.files_upload_v2(
+            upload = await env.slack_client.files_upload_v2(
                 channel=env.slack_bts_channel,
                 file=pie_chart,
                 title="ticket status",
                 initial_comment=msg,
             )
+            thread_ts = (
+                await get_file_share_ts(upload["files"][0]["id"], env.slack_bts_channel)
+                if thread_messages
+                else None
+            )
         else:
-            await env.slack_client.chat_postMessage(
+            response = await env.slack_client.chat_postMessage(
                 channel=env.slack_bts_channel, text=msg
+            )
+            thread_ts = response["ts"]
+
+        if thread_messages and not thread_ts:
+            logging.warning(
+                "Couldn't find the daily stats message ts, posting tickets to the channel instead"
+            )
+        for thread_msg in thread_messages:
+            await env.slack_client.chat_postMessage(
+                channel=env.slack_bts_channel,
+                text=thread_msg,
+                thread_ts=thread_ts,
             )
 
         logging.info("Daily stats message sent successfully.")
